@@ -32,6 +32,12 @@
     img.preview { max-width: 100%; height: auto; margin-top: 10px; border-radius: 4px; display: none; }
     .status { margin-top: 10px; font-weight: bold; color: #d9534f; font-size: 14px; }
 
+    /* 検索・インデックスフィルター表示エリア */
+    .search-box { margin-bottom: 10px; }
+    .index-filter { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 12px; }
+    .index-btn { flex: 1 0 18%; padding: 6px 2px; font-size: 12px; font-weight: bold; border: 1px solid #ccc; background: white; border-radius: 4px; cursor: pointer; text-align: center; }
+    .index-btn.active { background: #007bff; color: white; border-color: #007bff; }
+
     /* 一覧用（アコーディオン）スタイル */
     .list-item { background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.08); margin-bottom: 10px; overflow: hidden; }
     .list-header { padding: 14px 16px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; background: #fff; }
@@ -96,6 +102,27 @@
 
   <!-- タブ2: 保存一覧 -->
   <div id="listTab" class="tab-content">
+    <!-- 検索バー -->
+    <div class="search-box">
+      <input type="text" id="searchInput" placeholder="🔍 名前や会社名で検索..." oninput="renderCards()">
+    </div>
+
+    <!-- あいうえおインデックスフィルター -->
+    <div class="index-filter" id="indexFilter">
+      <button class="index-btn active" onclick="setIndexFilter('')">全件</button>
+      <button class="index-btn" onclick="setIndexFilter('あ')">あ行</button>
+      <button class="index-btn" onclick="setIndexFilter('か')">か行</button>
+      <button class="index-btn" onclick="setIndexFilter('さ')">さ行</button>
+      <button class="index-btn" onclick="setIndexFilter('た')">た行</button>
+      <button class="index-btn" onclick="setIndexFilter('な')">な行</button>
+      <button class="index-btn" onclick="setIndexFilter('は')">は行</button>
+      <button class="index-btn" onclick="setIndexFilter('ま')">ま行</button>
+      <button class="index-btn" onclick="setIndexFilter('や')">や行</button>
+      <button class="index-btn" onclick="setIndexFilter('ら')">ら行</button>
+      <button class="index-btn" onclick="setIndexFilter('わ')">わ行</button>
+      <button class="index-btn" onclick="setIndexFilter('他')">他</button>
+    </div>
+
     <div id="cardList"></div>
   </div>
 
@@ -105,6 +132,7 @@
     const preview = document.getElementById('preview');
     const status = document.getElementById('status');
     let currentImageData = "";
+    let selectedIndexGroup = ""; // 選択中のインデックスグループ
 
     function switchTab(tabId) {
       document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
@@ -343,8 +371,56 @@
       }
     }
 
+    // あ行〜わ行のインデックスフィルター設定
+    function setIndexFilter(group) {
+      selectedIndexGroup = group;
+      
+      // ボタンの見た目をハイライト切り替え
+      const btns = document.querySelectorAll('.index-btn');
+      btns.forEach(btn => {
+        if ((group === '' && btn.innerText === '全件') || btn.innerText === `${group}行` || (group === '他' && btn.innerText === '他')) {
+          btn.classList.add('active');
+        } else {
+          btn.classList.remove('active');
+        }
+      });
+
+      renderCards();
+    }
+
+    // 名前の頭文字がどの五十音行に属するか判定
+    function getKanaGroup(char) {
+      if (!char) return '他';
+      const code = char.charCodeAt(0);
+      
+      // ひらがな・カタカナの行判定範囲
+      if (/[あ-おア-オ]/
+.test(char)) return 'あ';
+      if (/[か-こカ-コ]/
+.test(char)) return 'か';
+      if (/[さ-そサ-ソ]/
+.test(char)) return 'さ';
+      if (/[た-とタ-ト]/
+.test(char)) return 'た';
+      if (/[な-のナ-ノ]/
+.test(char)) return 'な';
+      if (/[は-ほハ-ホ]/
+.test(char)) return 'は';
+      if (/[ま-もマ-モ]/
+.test(char)) return 'ま';
+      if (/[や-よヤ-ヨ]/
+.test(char)) return 'や';
+      if (/[ら-ろラ-ロ]/
+.test(char)) return 'ら';
+      if (/[わ-んワ-ン]/
+.test(char)) return 'わ';
+      
+      return '他'; // 漢字やアルファベットなど
+    }
+
     function renderCards() {
       const cardList = document.getElementById('cardList');
+      const searchKeyword = document.getElementById('searchInput').value.toLowerCase().trim();
       let cards = JSON.parse(localStorage.getItem('myCards') || '[]');
       
       if (cards.length === 0) {
@@ -352,12 +428,35 @@
         return;
       }
 
-      // 氏名で五十音順（あいうえお順）に並べ替え
+      // 1. 五十音順にソート
       cards.sort((a, b) => {
         const nameA = a.name || 'ん';
         const nameB = b.name || 'ん';
         return nameA.localeCompare(nameB, 'ja');
       });
+
+      // 2. 検索キーワードで絞り込み
+      if (searchKeyword) {
+        cards = cards.filter(card => 
+          (card.name && card.name.toLowerCase().includes(searchKeyword)) ||
+          (card.company && card.company.toLowerCase().includes(searchKeyword)) ||
+          (card.tel && card.tel.includes(searchKeyword)) ||
+          (card.mobile && card.mobile.includes(searchKeyword))
+        );
+      }
+
+      // 3. インデックス（あ〜わ行）で絞り込み
+      if (selectedIndexGroup) {
+        cards = cards.filter(card => {
+          const firstChar = (card.name || '').trim().charAt(0);
+          return getKanaGroup(firstChar) === selectedIndexGroup;
+        });
+      }
+
+      if (cards.length === 0) {
+        cardList.innerHTML = '<p style="text-align:center; color:#888;">該当する名刺は見つかりませんでした。</p>';
+        return;
+      }
 
       cardList.innerHTML = cards.map(card => `
         <div class="list-item">
