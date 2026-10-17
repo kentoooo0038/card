@@ -6,53 +6,103 @@
   <title>名刺管理アプリ</title>
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <style>
-    body { font-family: sans-serif; padding: 16px; max-width: 500px; margin: 0 auto; background: #f9f9f9; }
-    .card { background: white; padding: 16px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 16px; }
-    label { display: block; margin-top: 10px; font-weight: bold; font-size: 14px; }
+    body { font-family: sans-serif; padding: 16px; max-width: 500px; margin: 0 auto; background: #f4f6f8; }
+    h1 { font-size: 20px; text-align: center; color: #333; margin-bottom: 16px; }
+
+    /* タブのスタイル */
+    .tab-container { display: flex; border-bottom: 2px solid #ccc; margin-bottom: 16px; background: white; border-radius: 8px 8px 0 0; overflow: hidden; }
+    .tab-button { flex: 1; padding: 12px; border: none; background: #e9ecef; font-weight: bold; cursor: pointer; color: #666; font-size: 14px; }
+    .tab-button.active { background: #007bff; color: white; }
+
+    /* コンテンツ表示エリア */
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    .card { background: white; padding: 16px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.08); margin-bottom: 12px; }
+    label { display: block; margin-top: 10px; font-weight: bold; font-size: 14px; color: #444; }
     input, button { width: 100%; padding: 10px; margin-top: 4px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
-    button { background: #007bff; color: white; border: none; font-weight: bold; margin-top: 16px; cursor: pointer; }
+    button.save-btn { background: #007bff; color: white; border: none; font-weight: bold; margin-top: 16px; cursor: pointer; }
     img.preview { max-width: 100%; height: auto; margin-top: 10px; border-radius: 4px; display: none; }
     .status { margin-top: 10px; font-weight: bold; color: #d9534f; font-size: 14px; }
-    .item-img { max-width: 100%; height: auto; border-radius: 4px; margin-bottom: 8px; }
+
+    /* 一覧用（アコーディオン）スタイル */
+    .list-item { background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.08); margin-bottom: 10px; overflow: hidden; }
+    .list-header { padding: 14px 16px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; background: #fff; }
+    .list-header:hover { background: #f8f9fa; }
+    .list-header-title { font-weight: bold; font-size: 16px; color: #333; }
+    .list-header-company { font-size: 13px; color: #666; margin-top: 2px; }
+    .arrow-icon { font-size: 12px; color: #888; }
+    
+    .list-details { display: none; padding: 16px; border-top: 1px solid #eee; background: #fafafa; }
+    .item-img { max-width: 100%; height: auto; border-radius: 4px; margin-bottom: 12px; }
     .tel-link { color: #007bff; text-decoration: none; font-weight: bold; }
-    .company-name { color: #555; font-size: 14px; margin-top: -4px; margin-bottom: 8px; }
+    
+    /* ボタン群のスタイル */
+    .btn-group { display: flex; gap: 8px; margin-top: 12px; }
+    .edit-btn { background: #28a745; color: white; border: none; padding: 8px; font-size: 12px; border-radius: 4px; cursor: pointer; flex: 1; }
+    .delete-btn { background: #dc3545; color: white; border: none; padding: 8px; font-size: 12px; border-radius: 4px; cursor: pointer; flex: 1; }
+    .cancel-btn { background: #6c757d; color: white; border: none; padding: 8px; font-size: 12px; border-radius: 4px; cursor: pointer; flex: 1; }
+    .edit-input { margin-bottom: 8px; }
   </style>
 </head>
 <body>
 
   <h1>📇 名刺管理アプリ</h1>
 
-  <div class="card">
-    <h2>1. 名刺を撮影</h2>
-    <input type="file" id="photoInput" accept="image/*" capture="environment">
-    <img id="preview" class="preview" alt="プレビュー">
-    <p id="status" class="status"></p>
-
-    <h2>2. 自動抽出結果</h2>
-    
-    <label>👤 氏名</label>
-    <input type="text" id="nameInput" placeholder="例: 山田 太郎">
-
-    <label>🏢 会社名</label>
-    <input type="text" id="companyInput" placeholder="例: 株式会社〇〇">
-
-    <label>☎️ 固定電話 (TEL)</label>
-    <input type="tel" id="telInput" placeholder="例: 082-262-7800">
-
-    <label>📱 携帯電話 (Mobile)</label>
-    <input type="tel" id="mobileInput" placeholder="例: 080-3885-2980">
-
-    <button onclick="saveCard()">保存する</button>
+  <!-- タブボタン -->
+  <div class="tab-container">
+    <button class="tab-button active" onclick="switchTab('registerTab')">📷 撮影・入力</button>
+    <button class="tab-button" onclick="switchTab('listTab')">📁 保存一覧</button>
   </div>
 
-  <h2>保存した名刺</h2>
-  <div id="cardList"></div>
+  <!-- タブ1: 撮影・入力 -->
+  <div id="registerTab" class="tab-content active">
+    <div class="card">
+      <label>1. 名刺を撮影</label>
+      <input type="file" id="photoInput" accept="image/*" capture="environment">
+      <img id="preview" class="preview" alt="プレビュー">
+      <p id="status" class="status"></p>
+
+      <label>👤 氏名</label>
+      <input type="text" id="nameInput" placeholder="例: 山田 太郎">
+
+      <label>🏢 会社名</label>
+      <input type="text" id="companyInput" placeholder="例: 株式会社〇〇">
+
+      <label>☎️ 固定電話 (TEL)</label>
+      <input type="tel" id="telInput" placeholder="例: 082-262-7800">
+
+      <label>📱 携帯電話 (Mobile)</label>
+      <input type="tel" id="mobileInput" placeholder="例: 080-3885-2980">
+
+      <button class="save-btn" onclick="saveCard()">保存して一覧へ</button>
+    </div>
+  </div>
+
+  <!-- タブ2: 保存一覧 -->
+  <div id="listTab" class="tab-content">
+    <div id="cardList"></div>
+  </div>
 
   <script>
     const photoInput = document.getElementById('photoInput');
     const preview = document.getElementById('preview');
     const status = document.getElementById('status');
     let currentImageData = "";
+
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+      document.querySelectorAll('.tab-button').forEach(el => el.classList.remove('active'));
+
+      document.getElementById(tabId).classList.add('active');
+      
+      if (tabId === 'registerTab') {
+        document.querySelectorAll('.tab-button')[0].classList.add('active');
+      } else {
+        document.querySelectorAll('.tab-button')[1].classList.add('active');
+        renderCards();
+      }
+    }
 
     photoInput.addEventListener('change', async (e) => {
       const file = e.target.files[0];
@@ -77,41 +127,28 @@
         const text = result.data.text;
         status.innerText = "✅ 読み取り完了！";
 
-        // 各入力欄を初期化
         document.getElementById('nameInput').value = "";
         document.getElementById('companyInput').value = "";
         document.getElementById('telInput').value = "";
         document.getElementById('mobileInput').value = "";
 
-        // --- 1. 氏名の自動抽出 (スペース入り2〜6文字) ---
         const extractedName = extractName(text);
-        if (extractedName) {
-          document.getElementById('nameInput').value = extractedName;
-        }
+        if (extractedName) document.getElementById('nameInput').value = extractedName;
 
-        // --- 2. 会社名の自動抽出 ---
         const extractedCompany = extractCompany(text);
-        if (extractedCompany) {
-          document.getElementById('companyInput').value = extractedCompany;
-        }
+        if (extractedCompany) document.getElementById('companyInput').value = extractedCompany;
 
-        // --- 3. 携帯電話の判定 ---
         const mobilePattern = /(?:携帯|Mobile|MOBILE|mob)[\s\S]{0,15}?(\d{2,4}[-\s]?\d{2,4}[-\s]?\d{3,4})/;
         const mobileMatch = text.match(mobilePattern);
-
         if (mobileMatch) {
           document.getElementById('mobileInput').value = mobileMatch[1].replace(/\s/g, '');
         } else {
           const directMobileMatch = text.match(/(0[789]0[-\s]?\d{4}[-\s]?\d{4})/);
-          if (directMobileMatch) {
-            document.getElementById('mobileInput').value = directMobileMatch[0].replace(/\s/g, '');
-          }
+          if (directMobileMatch) document.getElementById('mobileInput').value = directMobileMatch[0].replace(/\s/g, '');
         }
 
-        // --- 4. 固定電話の判定 ---
         const telPattern = /(?:TEL|Tel|tel|電話)[\s\S]{0,15}?(\d{2,4}[-\s]?\d{2,4}[-\s]?\d{3,4})/;
         const telMatch = text.match(telPattern);
-
         if (telMatch) {
           document.getElementById('telInput').value = telMatch[1].replace(/\s/g, '');
         } else {
@@ -134,7 +171,6 @@
       }
     }
 
-    // 氏名抽出ロジック（スペースが入っている2〜6文字）
     function extractName(text) {
       const lines = text.split('\n').map(l => l.trim()).filter(l => l !== '');
       const ignoreList = ['株式会社', '有限会社', '合同会社', 'TEL', 'Tel', 'FAX', 'Fax', 'http', 'www', '@', '〒', '都', '道', '府', '県', '市', '区'];
@@ -152,27 +188,14 @@
       return "";
     }
 
-    // 会社名抽出ロジック（法人格キーワードを判定）
     function extractCompany(text) {
       const lines = text.split('\n').map(l => l.trim()).filter(l => l !== '');
-      
-      // 法人格キーワード一覧
-      const companyKeywords = [
-        '株式会社', '有限会社', '合同会社', '合資会社', '合名会社', 
-        '一般社団法人', '公益社団法人', '一般財団法人', '公益財団法人', '特定非営利活動法人', 'NPO法人',
-        '(株)', '（株）', '(有)', '（有）',
-        'Inc.', 'Co., Ltd.', 'Corp.', 'LLC'
-      ];
+      const companyKeywords = ['株式会社', '有限会社', '合同会社', '一般社団法人', 'NPO法人', '(株)', '（株）', 'Inc.', 'Co., Ltd.', 'Corp.'];
 
       for (let line of lines) {
-        // 数字のみの行やメールアドレス、URLはスキップ
-        if (line.includes('@') || line.includes('http') || line.includes('www')) continue;
-
-        // キーワードが含まれている行を会社名と判定
+        if (line.includes('@') || line.includes('http')) continue;
         for (let kw of companyKeywords) {
-          if (line.includes(kw)) {
-            return line;
-          }
+          if (line.includes(kw)) return line;
         }
       }
       return "";
@@ -202,7 +225,6 @@
       cards.unshift(newCard);
       localStorage.setItem('myCards', JSON.stringify(cards));
 
-      // フォーム初期化
       document.getElementById('nameInput').value = '';
       document.getElementById('companyInput').value = '';
       document.getElementById('telInput').value = '';
@@ -212,7 +234,63 @@
       status.innerText = '';
       currentImageData = "";
 
-      renderCards();
+      switchTab('listTab');
+    }
+
+    function toggleDetails(id) {
+      const detailsEl = document.getElementById(`details-${id}`);
+      const arrowEl = document.getElementById(`arrow-${id}`);
+      if (detailsEl.style.display === 'block') {
+        detailsEl.style.display = 'none';
+        arrowEl.innerText = '▼';
+      } else {
+        detailsEl.style.display = 'block';
+        arrowEl.innerText = '▲';
+      }
+    }
+
+    // 編集モードに切り替え
+    function enableEdit(id) {
+      const cards = JSON.parse(localStorage.getItem('myCards') || '[]');
+      const card = cards.find(c => c.id === id);
+      if (!card) return;
+
+      const detailsEl = document.getElementById(`details-${id}`);
+      detailsEl.innerHTML = `
+        ${card.image ? `<img src="${card.image}" class="item-img">` : ''}
+        <label>👤 氏名</label>
+        <input type="text" id="edit-name-${id}" class="edit-input" value="${card.name || ''}">
+        
+        <label>🏢 会社名</label>
+        <input type="text" id="edit-company-${id}" class="edit-input" value="${card.company || ''}">
+        
+        <label>☎️ 固定電話</label>
+        <input type="tel" id="edit-tel-${id}" class="edit-input" value="${card.tel || ''}">
+        
+        <label>📱 携帯電話</label>
+        <input type="tel" id="edit-mobile-${id}" class="edit-input" value="${card.mobile || ''}">
+        
+        <div class="btn-group">
+          <button class="edit-btn" onclick="updateCard(${id})">💾 更新する</button>
+          <button class="cancel-btn" onclick="renderCards()">キャンセル</button>
+        </div>
+      `;
+    }
+
+    // 編集内容を保存（更新）
+    function updateCard(id) {
+      let cards = JSON.parse(localStorage.getItem('myCards') || '[]');
+      const index = cards.findIndex(c => c.id === id);
+      
+      if (index !== -1) {
+        cards[index].name = document.getElementById(`edit-name-${id}`).value;
+        cards[index].company = document.getElementById(`edit-company-${id}`).value;
+        cards[index].tel = document.getElementById(`edit-tel-${id}`).value;
+        cards[index].mobile = document.getElementById(`edit-mobile-${id}`).value;
+
+        localStorage.setItem('myCards', JSON.stringify(cards));
+        renderCards();
+      }
     }
 
     function renderCards() {
@@ -220,18 +298,30 @@
       const cards = JSON.parse(localStorage.getItem('myCards') || '[]');
       
       if (cards.length === 0) {
-        cardList.innerHTML = '<p>まだ保存された名刺はありません。</p>';
+        cardList.innerHTML = '<p style="text-align:center; color:#888;">まだ保存された名刺はありません。</p>';
         return;
       }
 
       cardList.innerHTML = cards.map(card => `
-        <div class="card">
-          ${card.image ? `<img src="${card.image}" class="item-img">` : ''}
-          <h3>${card.name || '氏名未設定'}</h3>
-          ${card.company ? `<p class="company-name">🏢 ${card.company}</p>` : ''}
-          ${card.tel ? `<p>☎️ TEL: <a href="tel:${card.tel}" class="tel-link">${card.tel}</a></p>` : ''}
-          ${card.mobile ? `<p>📱 携帯: <a href="tel:${card.mobile}" class="tel-link">${card.mobile}</a></p>` : ''}
-          <button onclick="deleteCard(${card.id})" style="background:#dc3545; padding: 6px; font-size: 12px; margin-top: 8px;">削除</button>
+        <div class="list-item">
+          <div class="list-header" onclick="toggleDetails(${card.id})">
+            <div>
+              <div class="list-header-title">👤 ${card.name || '氏名未設定'}</div>
+              ${card.company ? `<div class="list-header-company">🏢 ${card.company}</div>` : ''}
+            </div>
+            <div id="arrow-${card.id}" class="arrow-icon">▼</div>
+          </div>
+          
+          <div id="details-${card.id}" class="list-details">
+            ${card.image ? `<img src="${card.image}" class="item-img">` : ''}
+            ${card.tel ? `<p>☎️ TEL: <a href="tel:${card.tel}" class="tel-link">${card.tel}</a></p>` : ''}
+            ${card.mobile ? `<p>📱 携帯: <a href="tel:${card.mobile}" class="tel-link">${card.mobile}</a></p>` : ''}
+            
+            <div class="btn-group">
+              <button class="edit-btn" onclick="enableEdit(${card.id})">✏️ 編集</button>
+              <button class="delete-btn" onclick="deleteCard(${card.id})">🗑️ 削除</button>
+            </div>
+          </div>
         </div>
       `).join('');
     }
