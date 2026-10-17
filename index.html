@@ -3,24 +3,24 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>自動読み取り名刺管理アプリ</title>
-  <!-- Tesseract.js (無料のOCRライブラリ) を読み込み -->
+  <title>名刺管理アプリ</title>
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <style>
     body { font-family: sans-serif; padding: 16px; max-width: 500px; margin: 0 auto; background: #f9f9f9; }
     .card { background: white; padding: 16px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 16px; }
-    label { display: block; margin-top: 10px; font-weight: bold; }
+    label { display: block; margin-top: 10px; font-weight: bold; font-size: 14px; }
     input, button { width: 100%; padding: 10px; margin-top: 4px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
     button { background: #007bff; color: white; border: none; font-weight: bold; margin-top: 16px; cursor: pointer; }
     img.preview { max-width: 100%; height: auto; margin-top: 10px; border-radius: 4px; display: none; }
-    .status { margin-top: 10px; font-weight: bold; color: #d9534f; }
+    .status { margin-top: 10px; font-weight: bold; color: #d9534f; font-size: 14px; }
     .item-img { max-width: 100%; height: auto; border-radius: 4px; margin-bottom: 8px; }
     .tel-link { color: #007bff; text-decoration: none; font-weight: bold; }
+    .company-name { color: #555; font-size: 14px; margin-top: -4px; margin-bottom: 8px; }
   </style>
 </head>
 <body>
 
-  <h1>📇 自動解析つき名刺管理</h1>
+  <h1>📇 名刺管理アプリ</h1>
 
   <div class="card">
     <h2>1. 名刺を撮影</h2>
@@ -28,12 +28,19 @@
     <img id="preview" class="preview" alt="プレビュー">
     <p id="status" class="status"></p>
 
-    <h2>2. 自動抽出結果（修正も可能）</h2>
-    <label>電話番号</label>
-    <input type="tel" id="telInput" placeholder="自動で入力されます">
+    <h2>2. 自動抽出結果</h2>
+    
+    <label>👤 氏名</label>
+    <input type="text" id="nameInput" placeholder="例: 山田 太郎">
 
-    <label>名前・会社名などのメモ</label>
-    <input type="text" id="nameInput" placeholder="自動で入力されます">
+    <label>🏢 会社名</label>
+    <input type="text" id="companyInput" placeholder="例: 株式会社〇〇">
+
+    <label>☎️ 固定電話 (TEL)</label>
+    <input type="tel" id="telInput" placeholder="例: 082-262-7800">
+
+    <label>📱 携帯電話 (Mobile)</label>
+    <input type="tel" id="mobileInput" placeholder="例: 080-3885-2980">
 
     <button onclick="saveCard()">保存する</button>
   </div>
@@ -47,7 +54,6 @@
     const status = document.getElementById('status');
     let currentImageData = "";
 
-    // 撮影/選択された時の処理
     photoInput.addEventListener('change', async (e) => {
       const file = e.target.files[0];
       if (!file) return;
@@ -58,33 +64,69 @@
         preview.src = currentImageData;
         preview.style.display = 'block';
 
-        // OCRの実行
         await processOCR(currentImageData);
       };
       reader.readAsDataURL(file);
     });
 
-    // 写真から文字を解析する機能
     async function processOCR(imageSrc) {
-      status.innerText = "🔍 文字を読み取り中...（数秒かかります）";
+      status.innerText = "🔍 解析中...";
 
       try {
-        // 日本語(jpn)と英語(eng)の文字を解析
         const result = await Tesseract.recognize(imageSrc, 'jpn+eng');
         const text = result.data.text;
-
         status.innerText = "✅ 読み取り完了！";
 
-        // 1. 電話番号の検索 (携帯電話や市外局番のパターン)
-        const phoneRegex = /(0\d{1,4}[-\s]?\d{1,4}[-\s]?\d{3,4})/;
-        const phoneMatch = text.match(phoneRegex);
-        if (phoneMatch) {
-          document.getElementById('telInput').value = phoneMatch[0].replace(/\s/g, '');
+        // 各入力欄を初期化
+        document.getElementById('nameInput').value = "";
+        document.getElementById('companyInput').value = "";
+        document.getElementById('telInput').value = "";
+        document.getElementById('mobileInput').value = "";
+
+        // --- 1. 氏名の自動抽出 (スペース入り2〜6文字) ---
+        const extractedName = extractName(text);
+        if (extractedName) {
+          document.getElementById('nameInput').value = extractedName;
         }
 
-        // 2. 読み取ったテキスト全体をメモに入力（改行を整形）
-        const cleanText = text.split('\n').filter(line => line.trim() !== '').join(' / ');
-        document.getElementById('nameInput').value = cleanText;
+        // --- 2. 会社名の自動抽出 ---
+        const extractedCompany = extractCompany(text);
+        if (extractedCompany) {
+          document.getElementById('companyInput').value = extractedCompany;
+        }
+
+        // --- 3. 携帯電話の判定 ---
+        const mobilePattern = /(?:携帯|Mobile|MOBILE|mob)[\s\S]{0,15}?(\d{2,4}[-\s]?\d{2,4}[-\s]?\d{3,4})/;
+        const mobileMatch = text.match(mobilePattern);
+
+        if (mobileMatch) {
+          document.getElementById('mobileInput').value = mobileMatch[1].replace(/\s/g, '');
+        } else {
+          const directMobileMatch = text.match(/(0[789]0[-\s]?\d{4}[-\s]?\d{4})/);
+          if (directMobileMatch) {
+            document.getElementById('mobileInput').value = directMobileMatch[0].replace(/\s/g, '');
+          }
+        }
+
+        // --- 4. 固定電話の判定 ---
+        const telPattern = /(?:TEL|Tel|tel|電話)[\s\S]{0,15}?(\d{2,4}[-\s]?\d{2,4}[-\s]?\d{3,4})/;
+        const telMatch = text.match(telPattern);
+
+        if (telMatch) {
+          document.getElementById('telInput').value = telMatch[1].replace(/\s/g, '');
+        } else {
+          const generalPhoneMatches = text.match(/(0\d{1,4}[-\s]?\d{1,4}[-\s]?\d{3,4})/g);
+          if (generalPhoneMatches) {
+            const currentMobile = document.getElementById('mobileInput').value.replace(/-/g, '');
+            for (let ph of generalPhoneMatches) {
+              let cleanPh = ph.replace(/\s/g, '');
+              if (cleanPh.replace(/-/g, '') !== currentMobile) {
+                document.getElementById('telInput').value = cleanPh;
+                break;
+              }
+            }
+          }
+        }
 
       } catch (error) {
         console.error(error);
@@ -92,30 +134,79 @@
       }
     }
 
-    // 保存処理
+    // 氏名抽出ロジック（スペースが入っている2〜6文字）
+    function extractName(text) {
+      const lines = text.split('\n').map(l => l.trim()).filter(l => l !== '');
+      const ignoreList = ['株式会社', '有限会社', '合同会社', 'TEL', 'Tel', 'FAX', 'Fax', 'http', 'www', '@', '〒', '都', '道', '府', '県', '市', '区'];
+
+      for (let line of lines) {
+        if (ignoreList.some(ignore => line.includes(ignore))) continue;
+        if (/\d/.test(line)) continue;
+
+        const hasSpace = line.includes(' ') || line.includes(' ');
+        const charCountWithoutSpace = line.replace(/[\s ]/g, '').length;
+        if (hasSpace && charCountWithoutSpace >= 2 && charCountWithoutSpace <= 6) {
+          return line;
+        }
+      }
+      return "";
+    }
+
+    // 会社名抽出ロジック（法人格キーワードを判定）
+    function extractCompany(text) {
+      const lines = text.split('\n').map(l => l.trim()).filter(l => l !== '');
+      
+      // 法人格キーワード一覧
+      const companyKeywords = [
+        '株式会社', '有限会社', '合同会社', '合資会社', '合名会社', 
+        '一般社団法人', '公益社団法人', '一般財団法人', '公益財団法人', '特定非営利活動法人', 'NPO法人',
+        '(株)', '（株）', '(有)', '（有）',
+        'Inc.', 'Co., Ltd.', 'Corp.', 'LLC'
+      ];
+
+      for (let line of lines) {
+        // 数字のみの行やメールアドレス、URLはスキップ
+        if (line.includes('@') || line.includes('http') || line.includes('www')) continue;
+
+        // キーワードが含まれている行を会社名と判定
+        for (let kw of companyKeywords) {
+          if (line.includes(kw)) {
+            return line;
+          }
+        }
+      }
+      return "";
+    }
+
     function saveCard() {
       const name = document.getElementById('nameInput').value;
+      const company = document.getElementById('companyInput').value;
       const tel = document.getElementById('telInput').value;
+      const mobile = document.getElementById('mobileInput').value;
 
       if (!currentImageData) {
         alert('写真を撮影してください！');
         return;
       }
 
-      const newCard = {
-        id: Date.now(),
-        image: currentImageData,
-        name: name,
-        tel: tel
+      const newCard = { 
+        id: Date.now(), 
+        image: currentImageData, 
+        name: name, 
+        company: company,
+        tel: tel,
+        mobile: mobile
       };
 
       const cards = JSON.parse(localStorage.getItem('myCards') || '[]');
       cards.unshift(newCard);
       localStorage.setItem('myCards', JSON.stringify(cards));
 
-      // フォームリセット
+      // フォーム初期化
       document.getElementById('nameInput').value = '';
+      document.getElementById('companyInput').value = '';
       document.getElementById('telInput').value = '';
+      document.getElementById('mobileInput').value = '';
       photoInput.value = '';
       preview.style.display = 'none';
       status.innerText = '';
@@ -124,7 +215,6 @@
       renderCards();
     }
 
-    // 一覧表示
     function renderCards() {
       const cardList = document.getElementById('cardList');
       const cards = JSON.parse(localStorage.getItem('myCards') || '[]');
@@ -137,9 +227,11 @@
       cardList.innerHTML = cards.map(card => `
         <div class="card">
           ${card.image ? `<img src="${card.image}" class="item-img">` : ''}
-          <p>📞 ${card.tel ? `<a href="tel:${card.tel}" class="tel-link">${card.tel}</a>` : '電話番号なし'}</p>
-          <p>📝 ${card.name || '詳細なし'}</p>
-          <button onclick="deleteCard(${card.id})" style="background:#dc3545; padding: 6px; font-size: 12px;">削除</button>
+          <h3>${card.name || '氏名未設定'}</h3>
+          ${card.company ? `<p class="company-name">🏢 ${card.company}</p>` : ''}
+          ${card.tel ? `<p>☎️ TEL: <a href="tel:${card.tel}" class="tel-link">${card.tel}</a></p>` : ''}
+          ${card.mobile ? `<p>📱 携帯: <a href="tel:${card.mobile}" class="tel-link">${card.mobile}</a></p>` : ''}
+          <button onclick="deleteCard(${card.id})" style="background:#dc3545; padding: 6px; font-size: 12px; margin-top: 8px;">削除</button>
         </div>
       `).join('');
     }
