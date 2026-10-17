@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>自動読み取り名刺管理アプリ</title>
+  <!-- Tesseract.js (無料のOCRライブラリ) を読み込み -->
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <style>
+    body { font-family: sans-serif; padding: 16px; max-width: 500px; margin: 0 auto; background: #f9f9f9; }
+    .card { background: white; padding: 16px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 16px; }
+    label { display: block; margin-top: 10px; font-weight: bold; }
+    input, button { width: 100%; padding: 10px; margin-top: 4px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+    button { background: #007bff; color: white; border: none; font-weight: bold; margin-top: 16px; cursor: pointer; }
+    img.preview { max-width: 100%; height: auto; margin-top: 10px; border-radius: 4px; display: none; }
+    .status { margin-top: 10px; font-weight: bold; color: #d9534f; }
+    .item-img { max-width: 100%; height: auto; border-radius: 4px; margin-bottom: 8px; }
+    .tel-link { color: #007bff; text-decoration: none; font-weight: bold; }
+  </style>
+</head>
+<body>
+
+  <h1>📇 自動解析つき名刺管理</h1>
+
+  <div class="card">
+    <h2>1. 名刺を撮影</h2>
+    <input type="file" id="photoInput" accept="image/*" capture="environment">
+    <img id="preview" class="preview" alt="プレビュー">
+    <p id="status" class="status"></p>
+
+    <h2>2. 自動抽出結果（修正も可能）</h2>
+    <label>電話番号</label>
+    <input type="tel" id="telInput" placeholder="自動で入力されます">
+
+    <label>名前・会社名などのメモ</label>
+    <input type="text" id="nameInput" placeholder="自動で入力されます">
+
+    <button onclick="saveCard()">保存する</button>
+  </div>
+
+  <h2>保存した名刺</h2>
+  <div id="cardList"></div>
+
+  <script>
+    const photoInput = document.getElementById('photoInput');
+    const preview = document.getElementById('preview');
+    const status = document.getElementById('status');
+    let currentImageData = "";
+
+    // 撮影/選択された時の処理
+    photoInput.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        currentImageData = event.target.result;
+        preview.src = currentImageData;
+        preview.style.display = 'block';
+
+        // OCRの実行
+        await processOCR(currentImageData);
+      };
+      reader.readAsDataURL(file);
+    });
+
+    // 写真から文字を解析する機能
+    async function processOCR(imageSrc) {
+      status.innerText = "🔍 文字を読み取り中...（数秒かかります）";
+
+      try {
+        // 日本語(jpn)と英語(eng)の文字を解析
+        const result = await Tesseract.recognize(imageSrc, 'jpn+eng');
+        const text = result.data.text;
+
+        status.innerText = "✅ 読み取り完了！";
+
+        // 1. 電話番号の検索 (携帯電話や市外局番のパターン)
+        const phoneRegex = /(0\d{1,4}[-\s]?\d{1,4}[-\s]?\d{3,4})/;
+        const phoneMatch = text.match(phoneRegex);
+        if (phoneMatch) {
+          document.getElementById('telInput').value = phoneMatch[0].replace(/\s/g, '');
+        }
+
+        // 2. 読み取ったテキスト全体をメモに入力（改行を整形）
+        const cleanText = text.split('\n').filter(line => line.trim() !== '').join(' / ');
+        document.getElementById('nameInput').value = cleanText;
+
+      } catch (error) {
+        console.error(error);
+        status.innerText = "❌ 読み取りに失敗しました。";
+      }
+    }
+
+    // 保存処理
+    function saveCard() {
+      const name = document.getElementById('nameInput').value;
+      const tel = document.getElementById('telInput').value;
+
+      if (!currentImageData) {
+        alert('写真を撮影してください！');
+        return;
+      }
+
+      const newCard = {
+        id: Date.now(),
+        image: currentImageData,
+        name: name,
+        tel: tel
+      };
+
+      const cards = JSON.parse(localStorage.getItem('myCards') || '[]');
+      cards.unshift(newCard);
+      localStorage.setItem('myCards', JSON.stringify(cards));
+
+      // フォームリセット
+      document.getElementById('nameInput').value = '';
+      document.getElementById('telInput').value = '';
+      photoInput.value = '';
+      preview.style.display = 'none';
+      status.innerText = '';
+      currentImageData = "";
+
+      renderCards();
+    }
+
+    // 一覧表示
+    function renderCards() {
+      const cardList = document.getElementById('cardList');
+      const cards = JSON.parse(localStorage.getItem('myCards') || '[]');
+      
+      if (cards.length === 0) {
+        cardList.innerHTML = '<p>まだ保存された名刺はありません。</p>';
+        return;
+      }
+
+      cardList.innerHTML = cards.map(card => `
+        <div class="card">
+          ${card.image ? `<img src="${card.image}" class="item-img">` : ''}
+          <p>📞 ${card.tel ? `<a href="tel:${card.tel}" class="tel-link">${card.tel}</a>` : '電話番号なし'}</p>
+          <p>📝 ${card.name || '詳細なし'}</p>
+          <button onclick="deleteCard(${card.id})" style="background:#dc3545; padding: 6px; font-size: 12px;">削除</button>
+        </div>
+      `).join('');
+    }
+
+    function deleteCard(id) {
+      if (confirm('削除しますか？')) {
+        let cards = JSON.parse(localStorage.getItem('myCards') || '[]');
+        cards = cards.filter(card => card.id !== id);
+        localStorage.setItem('myCards', JSON.stringify(cards));
+        renderCards();
+      }
+    }
+
+    renderCards();
+  </script>
+</body>
+</html>
